@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — SGBE</title>
+  <link href="https://googleapis.com" rel="stylesheet">
+  <style>
+    :root {
+      --primary: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+      --bg: #f4f7fe;
+      --text: #2d3748;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .login-card {
+      background: white;
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+
+    .brand {
+      background: var(--primary);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-weight: 700;
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+
+    h2 { color: var(--text); margin-bottom: 30px; font-weight: 500; }
+
+    .form-group { text-align: left; margin-bottom: 20px; }
+
+    label { display: block; margin-bottom: 8px; color: #718096; font-size: 14px; }
+
+    input {
+      width: 100%;
+      padding: 12px 15px;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      box-sizing: border-box;
+      outline: none;
+      transition: 0.3s;
+    }
+
+    input:focus { border-color: #6a11cb; box-shadow: 0 0 0 3px rgba(106, 17, 203, 0.1); }
+
+    .btn-login {
+      width: 100%;
+      padding: 14px;
+      background: var(--primary);
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: 0.3s;
+    }
+
+    .btn-login:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    .error-msg { color: #e53e3e; font-size: 14px; margin-top: 15px; display: none; }
+  </style>
+</head>
+<body>
+
+  <div class="login-card">
+    <div class="brand">SGBE</div>
+    <h2>Acesse sua conta</h2>
+
+    <div class="form-group">
+      <label>E-mail</label>
+      <input type="email" id="email" placeholder="exemplo@escola.com">
+    </div>
+
+    <div class="form-group">
+      <label>Senha</label>
+      <input type="password" id="senha" placeholder="••••••••">
+    </div>
+
+    <button class="btn-login" onclick="fazerLogin()">Entrar no Sistema</button>
+    <div id="error" class="error-msg">E-mail ou senha incorretos.</div>
+  </div>
+
+  <script>
+    async function fazerLogin() {
+      const email = document.getElementById('email').value;
+      const senha = document.getElementById('senha').value;
+      const errorDiv = document.getElementById('error');
+
+      try {
+        const response = await fetch('http://localhost:3000/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, senha })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.token) {
+          localStorage.setItem('token', data.token);
+          window.location.href = 'index.html';
+        } else {
+          errorDiv.style.display = 'block';
+        }
+      } catch (err) {
+        alert('Erro ao conectar com o servidor.');
+      }
+    }
+  </script>
+</body>
+</html>

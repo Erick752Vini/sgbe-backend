@@ -1,37 +1,77 @@
+if (!localStorage.getItem('token')) {
+    window.location.href = 'login.html';
+  }
+  
+
 const DB = {
     livros: [],
     alunos: [],
     emprestimos: [],
-    _nextEmpId: 1,
-
-    load() {
-        const saved = localStorage.getItem('sgbe_db');
-        if (saved) {
-            const d = JSON.parse(saved);
-            this.livros = d.livros || [];
-            this.alunos = d.alunos || [];
-            this.emprestimos = d.emprestimos || [];
-            this._nextEmpId = d._nextEmpId || 1;
-        }
+  
+    // BUSCAR DADOS (GET)
+    async load() {
+      try {
+        const [resLivros, resAlunos, resEmp] = await Promise.all([
+          fetch('http://localhost:3000/livros'),
+          fetch('http://localhost:3000/alunos'),
+          fetch('http://localhost:3000/emprestimos')
+        ]);
+  
+        this.livros = await resLivros.json();
+        this.alunos = await resAlunos.json();
+        this.emprestimos = await resEmp.json();
+        
+        renderAll();
+      } catch (err) {
+        console.error("Erro ao conectar com a API:", err);
+        toast("Erro ao carregar dados do servidor.", "error");
+      }
     },
-
-    save() {
-        localStorage.setItem('sgbe_db', JSON.stringify({
-            livros: this.livros,
-            alunos: this.alunos,
-            emprestimos: this.emprestimos,
-            _nextEmpId: this._nextEmpId,
-        }));
+  
+    // SALVAR LIVRO (POST)
+    async adicionarLivro(livro) {
+      await fetch('http://localhost:3000/livros', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(livro)
+      });
+      await this.load();
     },
-
+  
+    // SALVAR ALUNO (POST)
+    async adicionarAluno(aluno) {
+      await fetch('http://localhost:3000/alunos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(aluno)
+      });
+      await this.load();
+    },
+  
+    // SALVAR EMPRÉSTIMO (POST)
+    async registrarEmprestimo(emp) {
+      await fetch('http://localhost:3000/emprestimos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(emp)
+      });
+      await this.load();
+    },
+  
+    // DEVOLVER LIVRO (PUT ou POST dependendo da sua rota)
+    async devolverLivro(id) {
+      await fetch(`http://localhost:3000/emprestimos/${id}/devolver`, {
+        method: 'PUT'
+      });
+      await this.load();
+    },
+  
+    // HELPERS LOCAIS
     livroDisponivel(id) {
-        return !this.emprestimos.some(e => e.livroId === id && e.status === 'ativo');
-    },
-
-    empAtivoDoAluno(alunoId) {
-        return this.emprestimos.filter(e => e.alunoId === alunoId && e.status === 'ativo');
-    },
-};
+      return !this.emprestimos.some(e => e.livroId === id && e.status === 'ativo');
+    }
+  };
+  
 
 // ---- SEÇÃO ATUAL ----
 let secaoAtual = 'livros';
@@ -117,14 +157,16 @@ function fmtData(d) {
 }
 
 function nomeAluno(id) {
-    const a = DB.alunos.find(a => a.id === id);
-    return a ? a.nome : `Aluno #${id}`;
-}
 
-function tituloLivro(id) {
-    const l = DB.livros.find(l => l.id === id);
+    const a = DB.alunos.find(a => String(a.id) === String(id));
+    return a ? a.nome : `Aluno #${id}`;
+  }
+  
+  function tituloLivro(id) {
+    const l = DB.livros.find(l => String(l.id) === String(id));
     return l ? l.titulo : `Livro #${id}`;
-}
+  }
+  
 
 // ---- TOAST ----
 let toastTimer;
@@ -163,9 +205,11 @@ btnClose.addEventListener('click', fecharModal);
 btnCancel.addEventListener('click', fecharModal);
 overlay.addEventListener('click', e => { if (e.target === overlay) fecharModal(); });
 
-btnSave.addEventListener('click', () => {
-    if (onSaveCallback) onSaveCallback();
-});
+btnSave.addEventListener('click', async () => { 
+    if (onSaveCallback) {
+      await onSaveCallback(); 
+    }
+  });  
 
 // ---- RF01 — LIVROS ----
 function renderLivros() {
@@ -202,8 +246,7 @@ function renderLivros() {
         tbody.appendChild(tr);
     });
 }
-
-function abrirModalLivro(id) {
+    function abrirModalLivro(id) {
     const livro = id ? DB.livros.find(l => l.id === id) : null;
     const html = `
       <div class="form-group">
@@ -220,30 +263,32 @@ function abrirModalLivro(id) {
       </div>
     `;
 
-    abrirModal(livro ? 'Editar Livro' : 'Novo Livro', html, () => {
+    abrirModal(livro ? 'Editar Livro' : 'Novo Livro', html, async () => {
         const fId = document.getElementById('f-id').value.trim();
         const fTit = document.getElementById('f-titulo').value.trim();
         const fAut = document.getElementById('f-autor').value.trim();
 
-        if (!fId || !fTit || !fAut) { toast('Preencha todos os campos.', 'error'); return; }
+        if (!fId || !fTit || !fAut) { 
+            toast('Preencha todos os campos.', 'error'); 
+            return; 
+        }
 
         if (!livro && DB.livros.find(l => l.id === fId)) {
-            toast('Código já existe.', 'error'); return;
+            toast('Código já existe.', 'error'); 
+            return;
         }
 
         if (livro) {
             livro.titulo = fTit;
             livro.autor = fAut;
             toast('Livro atualizado.', 'success');
+            fecharModal(); // Adicionei para fechar ao editar também
         } else {
-            DB.livros.push({ id: fId, titulo: fTit, autor: fAut });
-            toast('Livro cadastrado.', 'success');
-        }
-
-        DB.save();
-        fecharModal();
-        renderAll();
-    });
+            await DB.adicionarLivro({ id: fId, titulo: fTit, autor: fAut });
+            toast('Livro cadastrado no Banco de Dados!', 'success');
+            fecharModal();
+        } // <--- Faltava fechar o ELSE aqui
+    }); // <--- Faltava fechar o abrirModal aqui
 }
 
 function excluirLivro(id) {
@@ -292,59 +337,69 @@ function renderAlunos() {
 function abrirModalAluno(id) {
     const aluno = id ? DB.alunos.find(a => a.id === id) : null;
     const html = `
-        <div class="form-group">
-          <label>Matrícula</label>
-          <input id="f-id" type="text" placeholder="Ex: 2024001" value="${aluno ? aluno.id : ''}" ${aluno ? 'readonly' : ''} />
-        </div>
-        <div class="form-group">
-          <label>Nome completo</label>
-          <input id="f-nome" type="text" placeholder="Nome do aluno" value="${aluno ? aluno.nome : ''}" />
-        </div>
-        <div class="form-group">
-          <label>Turma</label>
-          <input id="f-turma" type="text" placeholder="Ex: 9A" value="${aluno ? (aluno.turma || '') : ''}" />
-        </div>
-      `;
-
-    abrirModal(aluno ? 'Editar Aluno' : 'Novo Aluno', html, () => {
-        const fId = document.getElementById('f-id').value.trim();
-        const fNome = document.getElementById('f-nome').value.trim();
-        const fTur = document.getElementById('f-turma').value.trim();
-
-        if (!fId || !fNome) { toast('Preencha os campos obrigatórios.', 'error'); return; }
-
-        if (!aluno && DB.alunos.find(a => a.id === fId)) {
-            toast('Matrícula já existe.', 'error'); return;
-        }
-
-        if (aluno) {
-            aluno.nome = fNome;
-            aluno.turma = fTur;
-            toast('Aluno atualizado.', 'success');
-        } else {
-            DB.alunos.push({ id: fId, nome: fNome, turma: fTur });
-            toast('Aluno cadastrado.', 'success');
-        }
-
-        DB.save();
+      <div class="form-group"><label>Matrícula</label><input id="f-id" type="text" value="${aluno ? aluno.matricula : ''}" ${aluno ? 'readonly' : ''} /></div>
+      <div class="form-group"><label>Nome</label><input id="f-nome" type="text" value="${aluno ? aluno.nome : ''}" /></div>
+      <div class="form-group"><label>Email</label><input id="f-email" type="email" value="${aluno ? aluno.email : ''}" /></div>
+      <div class="form-group"><label>Senha</label><input id="f-senha" type="password" placeholder="Mínimo 6 caracteres" /></div>
+      <div class="form-group"><label>Turma</label><input id="f-turma" type="text" value="${aluno ? aluno.turma : ''}" /></div>
+    `;
+  
+    abrirModal(aluno ? 'Editar Aluno' : 'Novo Aluno', html, async () => {
+      const fId = document.getElementById('f-id').value.trim();
+      const fNome = document.getElementById('f-nome').value.trim();
+      const fEmail = document.getElementById('f-email').value.trim();
+      const fSenha = document.getElementById('f-senha').value.trim();
+      const fTur = document.getElementById('f-turma').value.trim();
+  
+      if (!fId || !fNome || !fEmail || (!aluno && !fSenha)) { 
+        toast('Preencha todos os campos, incluindo email e senha.', 'error'); 
+        return; 
+      }
+  
+      if (aluno) {
+        // Lógica de update aqui se necessário
         fecharModal();
-        renderAll();
+      } else {
+        // ENVIO PARA O MYSQL
+        await DB.adicionarAluno({ 
+          matricula: fId, 
+          nome: fNome, 
+          email: fEmail, 
+          senha: fSenha, 
+          turma: fTur 
+        });
+        toast('Aluno cadastrado com sucesso!', 'success');
+        fecharModal();
+      }
     });
-}
+  }
+  
 
-function excluirAluno(id) {
+async function excluirAluno(id) { // Adicionado async aqui
     const temEmp = DB.emprestimos.some(e => e.alunoId === id && e.status === 'ativo');
+    
     if (temEmp) {
         toast('Aluno possui empréstimo ativo. Devolva antes de excluir.', 'error');
         return;
     }
-    confirmar(`Excluir o aluno "${nomeAluno(id)}"?`, () => {
-        DB.alunos = DB.alunos.filter(a => a.id !== id);
-        DB.save();
-        renderAll();
-        toast('Aluno excluído.', 'success');
+
+    confirmar(`Excluir o aluno "${nomeAluno(id)}"?`, async () => { // Adicionado async aqui também
+        try {
+            // Faz a chamada de exclusão para o servidor
+            await fetch(`http://localhost:3000/alunos/${id}`, {
+                method: 'DELETE'
+            });
+
+            // Recarrega os dados do banco para atualizar a tela
+            await DB.load(); 
+            toast('Aluno excluído do banco de dados.', 'success');
+        } catch (err) {
+            console.error("Erro ao excluir:", err);
+            toast('Erro ao excluir aluno no servidor.', 'error');
+        }
     });
 }
+
 
 // ---- RF03 — EMPRÉSTIMOS ----
 function renderEmprestimos() {
